@@ -1,0 +1,6 @@
+{
+  "name": "វិទ្យាល័យសម្ដេចតេជោហ៊ុនសែនស្ទឹងត្រង់",
+  "description": "ប្រព័ន្ធគ្រប់គ្រងសាលារៀន វិទ្យាល័យសម្ដេចតេជោហ៊ុនសែនស្ទឹងត្រង់ (Samdech Techo Hun Sen Stung Trang High School Management System)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

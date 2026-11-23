@@ -1,0 +1,501 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Times New Roman", "Time New Roman", "Khmer OS Battambang", "Battambang", Times, serif;
+  --font-khmer: "Times New Roman", "Time New Roman", "Khmer OS Battambang", "Battambang", Times, serif;
+  --font-english: "Times New Roman", "Time New Roman", Times, serif;
+  --font-battambang: "Khmer OS Battambang", "Battambang", "Times New Roman", Times, serif;
+  --font-moul: "Moul", "Khmer OS Muol", "Khmer OS Muol Light", cursive, serif;
+}
+
+/* ==========================================================================
+   KHMER (KHMER OS BATTAMBANG) & ENGLISH (TIMES NEW ROMAN) TYPOGRAPHY
+   ពុម្ពអក្សរខ្មែរ Khmer OS Battambang និងអក្សរអង់គ្លេស Times New Roman
+   ========================================================================== */
+
+:root {
+  font-family: "Times New Roman", "Time New Roman", "Khmer OS Battambang", "Battambang", Times, serif;
+  line-height: 1.8;
+}
+
+html,
+body {
+  font-family: "Times New Roman", "Time New Roman", "Khmer OS Battambang", "Battambang", Times, serif;
+  line-height: 1.8;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-khmer,
+.font-sans {
+  font-family: "Times New Roman", "Time New Roman", "Khmer OS Battambang", "Battambang", Times, serif !important;
+  line-height: 1.8;
+}
+
+.font-english {
+  font-family: "Times New Roman", "Time New Roman", Times, serif !important;
+}
+
+.font-battambang {
+  font-family: "Khmer OS Battambang", "Battambang", "Times New Roman", Times, serif !important;
+  line-height: 1.8;
+}
+
+.font-moul {
+  font-family: "Moul", "Khmer OS Muol", "Khmer OS Muol Light", cursive, serif !important;
+  line-height: 1.95 !important;
+  padding-top: 0.14em;
+  padding-bottom: 0.16em;
+  display: inline-block;
+}
+
+h1.font-moul,
+h2.font-moul,
+h3.font-moul,
+h4.font-moul,
+div.font-moul,
+p.font-moul {
+  display: block;
+}
+
+/* ==========================================================================
+   KHMER VOWEL & SUBSCRIPT ANTI-CLIPPING GUARD
+   ការពារកុំឱ្យដាច់ស្រៈលើ (ិ ី ឹ ឺ ំ ័ ៊) ឬជើងអក្សរ/ស្រៈក្រោម (ុ ូ ួ ្ក ្រ ្ល)
+   ========================================================================== */
+
+@media screen {
+  h1, h2, h3, h4, h5, h6 {
+    line-height: 1.85 !important;
+    padding-top: 0.08em;
+    padding-bottom: 0.08em;
+  }
+
+  p, li, label, td, th {
+    line-height: 1.8 !important;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    line-height: 1.75 !important;
+  }
+
+  select {
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+  }
+
+  /* Prevent .truncate and .line-clamp-* overflow:hidden from slicing Khmer ascenders/descenders */
+  .truncate {
+    line-height: 1.85 !important;
+    padding-top: 0.12em !important;
+    padding-bottom: 0.14em !important;
+  }
+
+  .line-clamp-1,
+  .line-clamp-2,
+  .line-clamp-3 {
+    line-height: 1.85 !important;
+    padding-top: 0.1em;
+    padding-bottom: 0.12em;
+  }
+
+  /* Override tight line-heights that clip Khmer stacked vowels */
+  .leading-none,
+  .leading-tight,
+  .leading-snug {
+    line-height: 1.75 !important;
+  }
+
+  /* ==========================================================================
+     PC & ANDROID UNIVERSAL SMOOTH SCROLLING (VERTICAL & HORIZONTAL)
+     ធានាថាការអូសលើ-ក្រោម និងឆ្វេង-ស្ដាំ (ទៅមុខ-ថយក្រោយ) ដើររលូនទាំងលើកុំព្យូទ័រ និង Android
+     ========================================================================== */
+  html {
+    -webkit-overflow-scrolling: touch;
+    touch-action: auto !important;
+  }
+
+  body {
+    overflow-x: clip;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: auto;
+    touch-action: auto !important;
+  }
+
+  /* Prevent any touch-pan-y utility from blocking horizontal swiping (pan-x) */
+  .touch-pan-y,
+  .touch-pan-x {
+    touch-action: pan-x pan-y pinch-zoom !important;
+  }
+
+  /* Ensure wide tables and horizontal scroll containers allow both horizontal & vertical panning on Android & PC */
+  .overflow-x-auto,
+  .overflow-y-auto,
+  .overflow-auto {
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-x pan-y pinch-zoom !important;
+  }
+
+  .overflow-x-auto {
+    overflow-x: auto !important;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #94a3b8 #f1f5f9;
+  }
+
+  /* Clear, easy-to-grab scrollbars for PC Mouse & Android visual feedback */
+  .overflow-x-auto::-webkit-scrollbar,
+  .overflow-y-auto::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+
+  .overflow-x-auto::-webkit-scrollbar-track,
+  .overflow-y-auto::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 9999px;
+  }
+
+  .overflow-x-auto::-webkit-scrollbar-thumb,
+  .overflow-y-auto::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 9999px;
+  }
+
+  .overflow-x-auto::-webkit-scrollbar-thumb:hover,
+  .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+  }
+
+  .is-dragging-scroll {
+    cursor: grabbing !important;
+    user-select: none !important;
+  }
+
+  /* Safe area padding for Android gesture navigation bar */
+  .safe-area-bottom {
+    padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* Mobile & Android Specific Compact Scaling & Anti-Lag Rules (<= 768px) */
+@media screen and (max-width: 768px) {
+  html {
+    /* Scale down all rem-based typography, paddings, buttons, cards, and modals proportionally */
+    font-size: 13px !important;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* Tighter line-height on small mobile screens while still protecting Khmer vowels */
+  h1, h2, h3, h4, h5, h6 {
+    line-height: 1.65 !important;
+    padding-top: 0.04em;
+    padding-bottom: 0.04em;
+  }
+
+  p, li, label, td, th, button, input, select, textarea {
+    line-height: 1.6 !important;
+  }
+
+  /* Compact table cells so more columns fit on Android screen */
+  table th,
+  table td {
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.35rem !important;
+    padding-left: 0.4rem !important;
+    padding-right: 0.4rem !important;
+  }
+
+  /* Disable GPU-heavy backdrop-filter blur & infinite background animations on Android to eliminate scroll stutter */
+  *,
+  *::before,
+  *::after {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .animate-rgb-flow,
+  .rgb-glow-border,
+  .rgb-glow-pill,
+  .rgb-text-shimmer,
+  .animate-bell-ring,
+  .animate-pulse,
+  .animate-bounce,
+  .animate-ping {
+    animation: none !important;
+  }
+
+  .khmer-pattern-overlay {
+    background-image: none !important;
+  }
+
+  .khmer-kbach-card,
+  .khmer-kbach-header {
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06) !important;
+  }
+
+  .shadow-2xl,
+  .shadow-xl,
+  .shadow-lg {
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08) !important;
+  }
+
+  /* Auto-scale the 1120x792 Honor Certificate preview to fit cleanly inside tablet/large phone screens */
+  .certificate-print-page {
+    zoom: 0.46;
+  }
+}
+
+/* Extra-Compact Scaling for Standard Android Phones (<= 480px) */
+@media screen and (max-width: 480px) {
+  html {
+    font-size: 12px !important;
+  }
+
+  /* Fit the 1120px wide certificate cleanly inside a 360px-412px Android phone screen without horizontal scroll */
+  .certificate-print-page {
+    zoom: 0.31;
+  }
+}
+
+/* ==========================================================================
+   TRADITIONAL KHMER KBACH ORNAMENTAL STYLING (រចនាបថក្បាច់ខ្មែរ)
+   ========================================================================== */
+
+.khmer-kbach-card {
+  position: relative;
+  border: 1.5px solid rgba(245, 158, 11, 0.38);
+  box-shadow: 0 4px 20px -4px rgba(30, 58, 138, 0.08), inset 0 0 0 2px rgba(254, 243, 199, 0.45);
+}
+
+.khmer-kbach-header {
+  position: relative;
+  background: linear-gradient(135deg, #ffffff 0%, #fffbeb 55%, #fef3c7 100%);
+  border: 1.5px solid rgba(245, 158, 11, 0.45);
+  box-shadow: 0 6px 24px -6px rgba(180, 83, 9, 0.12), inset 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+
+.khmer-pattern-overlay {
+  background-image: radial-gradient(rgba(245, 158, 11, 0.14) 1.2px, transparent 1.2px),
+    radial-gradient(rgba(30, 58, 138, 0.07) 1.2px, transparent 1.2px);
+  background-size: 20px 20px;
+  background-position: 0 0, 10px 10px;
+}
+
+/* ==========================================================================
+   DYNAMIC RGB LIGHTING & BELL ANIMATIONS
+   ភ្លើង RGB ចលនាហូរសក្ដានុពល និងចលនាកណ្ដឹងរោទ៍ជូនដំណឹង
+   ========================================================================== */
+
+@keyframes rgb-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-rgb-flow {
+  background-size: 300% 300%;
+  animation: rgb-flow 5s ease infinite;
+}
+
+.rgb-glow-border {
+  position: relative;
+  background: linear-gradient(90deg, #ff0077, #7928ca, #0070f3, #00dfd8, #00ff88, #ffb700, #ff0077);
+  background-size: 400% 400%;
+  animation: rgb-flow 6s linear infinite;
+  padding: 3px;
+  border-radius: 1.5rem;
+  box-shadow: 0 0 25px rgba(121, 40, 202, 0.25), 0 0 40px rgba(0, 112, 243, 0.15);
+}
+
+.rgb-glow-pill {
+  position: relative;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899, #f59e0b, #10b981, #3b82f6);
+  background-size: 300% 300%;
+  animation: rgb-flow 4s ease infinite;
+}
+
+.rgb-text-shimmer {
+  background: linear-gradient(90deg, #60a5fa, #a78bfa, #f472b6, #fbbf24, #34d399, #60a5fa);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: rgb-flow 5s ease infinite;
+}
+
+@keyframes bell-ring {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  15%, 45% {
+    transform: rotate(18deg);
+  }
+  30%, 60% {
+    transform: rotate(-18deg);
+  }
+  75% {
+    transform: rotate(6deg);
+  }
+}
+
+.animate-bell-ring {
+  animation: bell-ring 1.2s ease-in-out infinite;
+  transform-origin: top center;
+}
+
+/* ==========================================================================
+   OFFICIAL A4 PRINT STYLESHEET
+   ធានាថាពេលបោះពុម្ព (Print) ចេញតែសន្លឹករបាយការណ៍ A4 ប៉ុណ្ណោះ
+   លាក់ក្បាលទំព័រ Header, Sidebar, Navigation, Buttons ទាំងអស់
+   ========================================================================== */
+
+@media print {
+  /* 1. Hide all website chrome, headers, navigation, buttons, and popups */
+  header,
+  nav,
+  aside,
+  footer,
+  button,
+  input,
+  select,
+  .no-print,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* 2. When the official print modal is active (mounted via createPortal on document.body), hide #root */
+  body.modal-print-active #root,
+  body.modal-print-active .no-print {
+    display: none !important;
+  }
+
+  /* 3. Reset document canvas to clean white A4 paper */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    font-size: 11pt !important;
+    font-family: "Times New Roman", "Time New Roman", "Khmer OS Battambang", "Battambang", Times, serif !important;
+  }
+
+  /* 4. Flatten modal overlay into normal print flow */
+  #official-print-modal-overlay {
+    position: static !important;
+    inset: auto !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  #official-print-modal-card {
+    position: static !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+    display: block !important;
+  }
+
+  #official-print-sheet {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin: 0 auto !important;
+    padding: 8mm 10mm !important;
+    box-sizing: border-box !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .print-card-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 14px !important;
+    justify-items: center !important;
+    align-items: start !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+    padding: 4px 0 !important;
+  }
+
+  .print-card-grid-portrait {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 12px !important;
+    justify-items: center !important;
+    align-items: start !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+    padding: 4px 0 !important;
+  }
+
+  .print-card-item {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    box-shadow: none !important;
+    border: 1.5px solid #94a3b8 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 5. A4 Page format & clean margins */
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm 8mm 10mm;
+  }
+
+  /* 6. Ensure high-fidelity color printing for school seal and official stamps */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Avoid awkward page breaks inside table rows and signatures */
+  tr, td, th {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  .signature-block {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}
