@@ -1067,10 +1067,17 @@ class StorageService {
           parsed.exams = mergedExams;
           if (!parsed.telegramSettings) {
             parsed.telegramSettings = {
-              botUsername: '',
+              botUsername: '@stschoolsystem_bot',
               botToken: '',
-              chatId: '',
-              isEnabled: false,
+              chatId: '8069577143',
+              isEnabled: true,
+            };
+          } else {
+            parsed.telegramSettings = {
+              botUsername: parsed.telegramSettings.botUsername || '@stschoolsystem_bot',
+              botToken: '',
+              chatId: parsed.telegramSettings.chatId || '8069577143',
+              isEnabled: true,
             };
           }
           return parsed;
@@ -1098,10 +1105,10 @@ class StorageService {
       banners: INITIAL_BANNERS,
       behaviorRecords: INITIAL_BEHAVIOR_RECORDS,
       telegramSettings: {
-        botUsername: '',
+        botUsername: '@stschoolsystem_bot',
         botToken: '',
-        chatId: '',
-        isEnabled: false,
+        chatId: '8069577143',
+        isEnabled: true,
       },
       deletedIds: [],
     };
@@ -1807,6 +1814,19 @@ class StorageService {
             sentAt: new Date().toISOString(),
           };
           this.db.notifications.unshift(notif);
+
+          // Dispatch live Telegram alert through server-side proxy when running in browser
+          if (typeof fetch === 'function') {
+            const targetChatId = (this.db.telegramSettings?.chatId || '8069577143').trim();
+            fetch('/api/telegram/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chatId: targetChatId,
+                message: telegramMessage,
+              }),
+            }).catch(() => {});
+          }
         }
       }
     }
@@ -2163,14 +2183,14 @@ class StorageService {
     this.saveDatabase(this.db);
   }
 
-  // Telegram Bot Settings Management
+  // Telegram Bot Settings Management (raw tokens stay server-side, never persisted in localStorage)
   public getTelegramSettings() {
     if (!this.db.telegramSettings) {
       this.db.telegramSettings = {
-        botUsername: '',
+        botUsername: '@stschoolsystem_bot',
         botToken: '',
-        chatId: '',
-        isEnabled: false,
+        chatId: '8069577143',
+        isEnabled: true,
       };
       this.saveDatabase(this.db);
     }
@@ -2178,15 +2198,17 @@ class StorageService {
   }
 
   public updateTelegramSettings(settings: Partial<SchoolDatabase['telegramSettings']>, actorName = 'Admin'): boolean {
-    this.db.telegramSettings = {
+    const merged = {
       ...this.getTelegramSettings(),
       ...settings,
+      botToken: '',
     };
+    this.db.telegramSettings = merged;
     this.logAudit(
       actorName,
       'admin',
       'កែប្រែការកំណត់ Telegram Bot',
-      `បានកែប្រែ Bot: ${this.db.telegramSettings.botUsername || ''} (Token: ${this.db.telegramSettings.botToken ? 'កំណត់រួច' : 'ទទេ'})`
+      `បានកែប្រែ Bot: ${merged.botUsername || '@stschoolsystem_bot'} (Chat ID: ${merged.chatId || '8069577143'})`
     );
     this.saveDatabase(this.db);
     return true;

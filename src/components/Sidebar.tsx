@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { UserRole } from '../types/index.ts';
 import { SCHOOL_LOGO_URL } from '../utils/schoolLogo.ts';
+import { PWAInstallButton } from './PWAInstallButton.tsx';
 
 export type NavTab =
   | 'dashboard'
@@ -42,6 +43,7 @@ interface SidebarProps {
   onSelectTab: (tab: NavTab) => void;
   userRole: UserRole;
   unexcusedCount: number;
+  collapsed?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -49,6 +51,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectTab,
   userRole,
   unexcusedCount,
+  collapsed = false,
 }) => {
   interface NavItem {
     id: NavTab;
@@ -169,40 +172,57 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const visibleItems = navItems;
 
   return (
-    <aside className="w-full md:w-68 bg-slate-900 text-slate-100 flex-shrink-0 flex flex-col justify-between border-r border-amber-500/25 no-print md:sticky md:top-[78px] md:h-[calc(100vh-78px)] md:overflow-y-auto overscroll-contain touch-pan-y pb-20 md:pb-0">
-      <div className="p-3">
+    <aside
+      className={`w-full ${
+        collapsed ? 'md:w-[78px]' : 'md:w-68'
+      } transition-[width] duration-200 bg-slate-900 text-slate-100 flex-shrink-0 flex flex-col justify-between border-r border-amber-500/25 no-print md:sticky md:top-[78px] md:h-[calc(100vh-78px)] md:overflow-y-auto overscroll-contain touch-pan-y pb-20 md:pb-0`}
+    >
+      <div className={collapsed ? 'p-2' : 'p-3'}>
         {/* School Logo Brand Card with Khmer Kbach Gold Frame */}
-        <div className="mb-3 p-3.5 bg-gradient-to-br from-slate-800 via-slate-900 to-amber-950/30 rounded-2xl border border-amber-400/45 shadow-md relative overflow-hidden">
-          <div className="flex items-center gap-3 relative z-10">
-            <div className="w-12 h-12 aspect-square shrink-0 rounded-full bg-white ring-2 ring-amber-400/80 shadow-sm flex items-center justify-center flex-shrink-0 overflow-hidden">
+        <div
+          className={`mb-3 ${
+            collapsed ? 'p-2 flex justify-center' : 'p-3.5'
+          } bg-gradient-to-br from-slate-800 via-slate-900 to-amber-950/30 rounded-2xl border border-amber-400/45 shadow-md relative overflow-hidden`}
+        >
+          <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} relative z-10`}>
+            <div
+              className={`${
+                collapsed ? 'w-10 h-10' : 'w-12 h-12'
+              } aspect-square shrink-0 rounded-full bg-white ring-2 ring-amber-400/80 shadow-sm flex items-center justify-center flex-shrink-0 overflow-hidden`}
+            >
               <img
                 src={SCHOOL_LOGO_URL}
                 alt="Logo វិទ្យាល័យសម្ដេចតេជោហ៊ុនសែនស្ទឹងត្រង់"
                 className="w-full h-full object-contain rounded-full"
               />
             </div>
-            <div className="min-w-0 flex-1 py-0.5">
-              <div className="font-moul text-xs text-amber-400 font-bold leading-[2] py-0.5">
-                វិទ្យាល័យសម្ដេចតេជោ
+            {!collapsed && (
+              <div className="min-w-0 flex-1 py-0.5">
+                <div className="font-moul text-xs text-amber-400 font-bold leading-[2] py-0.5">
+                  វិទ្យាល័យសម្ដេចតេជោ
+                </div>
+                <div className="text-[11px] text-amber-100/90 font-medium leading-relaxed">
+                  ហ៊ុនសែន ស្ទឹងត្រង់
+                </div>
               </div>
-              <div className="text-[11px] text-amber-100/90 font-medium leading-relaxed">
-                ហ៊ុនសែន ស្ទឹងត្រង់
-              </div>
+            )}
+          </div>
+          {!collapsed && (
+            <div className="mt-2 pt-1.5 border-t border-amber-400/20 flex items-center justify-center gap-2 text-[10px] text-amber-300/85 font-medium">
+              <span>❖</span>
+              <span>សិក្សា · វិន័យ · សីលធម៌</span>
+              <span>❖</span>
             </div>
-          </div>
-          {/* Traditional Khmer Diamond Divider inside Brand Card */}
-          <div className="mt-2 pt-1.5 border-t border-amber-400/20 flex items-center justify-center gap-2 text-[10px] text-amber-300/85 font-medium">
-            <span>❖</span>
-            <span>សិក្សា · វិន័យ · សីលធម៌</span>
-            <span>❖</span>
-          </div>
+          )}
         </div>
 
         {/* Navigation Category Label */}
-        <div className="px-3 py-1.5 text-[11px] font-semibold text-amber-400/90 uppercase tracking-wider flex items-center gap-1.5 leading-relaxed">
-          <span>❖</span>
-          <span>ម៉ឺនុយចម្បង (Navigation)</span>
-        </div>
+        {!collapsed && (
+          <div className="px-3 py-1.5 text-[11px] font-semibold text-amber-400/90 uppercase tracking-wider flex items-center gap-1.5 leading-relaxed">
+            <span>❖</span>
+            <span>ម៉ឺនុយចម្បង (Navigation)</span>
+          </div>
+        )}
 
         {/* Links */}
         <nav className="space-y-1.5 mt-1">
@@ -213,8 +233,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 key={item.id}
                 type="button"
+                title={collapsed ? `${item.label} (${item.sublabel})` : undefined}
                 onClick={() => onSelectTab(item.id)}
-                className={`w-full group flex items-center justify-between px-3 py-2.5 text-xs rounded-xl font-medium transition-all text-left cursor-pointer ${
+                className={`w-full group flex items-center ${
+                  collapsed ? 'justify-center px-2 py-2.5' : 'justify-between px-3 py-2.5'
+                } text-xs rounded-xl font-medium transition-all text-left cursor-pointer relative ${
                   isActive
                     ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 font-bold shadow-md ring-1 ring-amber-300'
                     : item.isHighlighted
@@ -222,7 +245,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     : 'text-slate-200 hover:bg-slate-800/90 hover:text-white'
                 }`}
               >
-                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-2.5 min-w-0 flex-1'}`}>
                   <Icon
                     className={`w-4 h-4 flex-shrink-0 ${
                       isActive
@@ -232,19 +255,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         : 'text-slate-400 group-hover:text-amber-400'
                     }`}
                   />
-                  <div className="min-w-0 flex-1 py-0.5">
-                    <div className="leading-[1.85] break-words">{item.label}</div>
-                    <div
-                      className={`text-[10px] leading-relaxed truncate ${
-                        isActive ? 'text-slate-900 font-medium' : 'text-slate-400'
-                      }`}
-                    >
-                      {item.sublabel}
+                  {!collapsed && (
+                    <div className="min-w-0 flex-1 py-0.5">
+                      <div className="leading-[1.85] break-words">{item.label}</div>
+                      <div
+                        className={`text-[10px] leading-relaxed truncate ${
+                          isActive ? 'text-slate-900 font-medium' : 'text-slate-400'
+                        }`}
+                      >
+                        {item.sublabel}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
-                {item.badge && (
+                {!collapsed && item.badge && (
                   <span
                     className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md flex-shrink-0 leading-normal ${
                       isActive ? 'bg-slate-900 text-amber-300' : item.badgeColor || 'bg-slate-800 text-slate-300'
@@ -259,18 +284,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* School Footer info */}
-      <div className="p-3 border-t border-amber-500/20 bg-slate-950/60">
-        <div className="px-3 py-2.5 bg-slate-800/60 rounded-xl border border-amber-400/25">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
-            <span className="text-[11px] font-semibold text-amber-300 leading-relaxed">ប្រព័ន្ធដំណើរការធម្មតា</span>
-          </div>
-          <div className="text-[10px] text-slate-300 mt-1 leading-relaxed">
-            កំណែទម្រង់ ៣.០ · វិទ្យាល័យសម្ដេចតេជោហ៊ុនសែនស្ទឹងត្រង់
+      {/* School Footer info & Desktop App Install */}
+      {!collapsed && (
+        <div className="p-3 border-t border-amber-500/20 bg-slate-950/60 space-y-2.5">
+          <PWAInstallButton variant="sidebar" />
+          <div className="px-3 py-2.5 bg-slate-800/60 rounded-xl border border-amber-400/25">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+              <span className="text-[11px] font-semibold text-amber-300 leading-relaxed">ប្រព័ន្ធដំណើរការធម្មតា</span>
+            </div>
+            <div className="text-[10px] text-slate-300 mt-1 leading-relaxed">
+              កំណែ Desktop & Mobile · វិទ្យាល័យសម្ដេចតេជោហ៊ុនសែនស្ទឹងត្រង់
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </aside>
   );
 };

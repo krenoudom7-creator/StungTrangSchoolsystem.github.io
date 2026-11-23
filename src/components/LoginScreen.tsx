@@ -17,6 +17,7 @@ import { User } from '../types/index.ts';
 import { SCHOOL_LOGO_URL } from '../utils/schoolLogo.ts';
 import { safeAvatar, DEFAULT_ADMIN_AVATAR } from '../utils/avatar.ts';
 import { KhmerFourCorners, KhmerDivider } from './KhmerOrnament.tsx';
+import { PWAInstallButton } from './PWAInstallButton.tsx';
 
 interface LoginScreenProps {
   onLoginSuccess: (user: User) => void;
@@ -299,14 +300,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           )}
         </div>
 
-        {/* School location footer badge */}
-        <div className="text-center mt-5 text-slate-400 text-xs">
-          <p className="font-medium text-slate-300">
-            វិទ្យាល័យសម្ដេចតេជោហ៊ុនសែនស្ទឹងត្រង់ · ស្រុកស្ទឹងត្រង់ ខេត្តកំពង់ចាម
-          </p>
-          <p className="text-[11px] text-slate-400 mt-0.5">
-            ប្រព័ន្ធគ្រប់គ្រងទិន្នន័យអប់រំ និងវត្តមានសិស្សតាមបច្ចេកវិទ្យាឌីជីថល
-          </p>
+        {/* School location footer badge & Desktop Install Button */}
+        <div className="text-center mt-5 text-slate-400 text-xs space-y-2.5">
+          <div>
+            <PWAInstallButton variant="login" />
+          </div>
+          <div>
+            <p className="font-medium text-slate-300">
+              វិទ្យាល័យសម្ដេចតេជោហ៊ុនសែនស្ទឹងត្រង់ · ស្រុកស្ទឹងត្រង់ ខេត្តកំពង់ចាម
+            </p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              ប្រព័ន្ធគ្រប់គ្រងទិន្នន័យអប់រំ និងវត្តមានសិស្ស (ដំណើរការលើកុំព្យូទ័រ និងទូរស័ព្ទ)
+            </p>
+          </div>
         </div>
       </div>
     </div>

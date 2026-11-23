@@ -1,4 +1,6 @@
+import 'dotenv/config';
 import express from 'express';
+import http from 'http';
 import { createServer as createViteServer } from 'vite';
 import fs from 'fs';
 import path from 'path';
@@ -456,8 +458,47 @@ async function startServer() {
   });
 
   // -------------------------------------------------------------
-  // School General Info & Telegram Proxy
+  // School General Info & Secure Server-Side Telegram Bot Proxy
   // -------------------------------------------------------------
+  const TELEGRAM_TOKEN_REGEX = /^\d{6,15}:[A-Za-z0-9_-]{20,120}$/;
+  const TELEGRAM_CHAT_ID_REGEX = /^-?\d{5,20}$|^@[a-zA-Z0-9_]{5,32}$/;
+
+  const normalizeBotUsername = (raw: string): string => {
+    const cleaned = String(raw || '').trim().replace(/^@+/, '').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 32);
+    return cleaned ? `@${cleaned}` : '@stschoolsystem_bot';
+  };
+
+  const maskTelegramToken = (token: string): string => {
+    if (!token) return '';
+    const colonIdx = token.indexOf(':');
+    if (colonIdx > 0) {
+      return `${token.slice(0, colonIdx + 5)}••••••••••••••••••••`;
+    }
+    return `${token.slice(0, 8)}••••••••••••••••••••`;
+  };
+
+  const telegramRuntimeConfig = {
+    botToken: (process.env.TELEGRAM_BOT_TOKEN || '').trim(),
+    botUsername: normalizeBotUsername(process.env.TELEGRAM_BOT_USERNAME || '@stschoolsystem_bot'),
+    chatId: (process.env.TELEGRAM_CHAT_ID || '8069577143').trim(),
+    source: (process.env.TELEGRAM_BOT_TOKEN || '').trim() ? ('env' as const) : ('none' as 'env' | 'runtime' | 'none'),
+  };
+
+  const resolveActiveTelegramToken = (providedToken?: unknown): string => {
+    const envToken = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
+    if (envToken && TELEGRAM_TOKEN_REGEX.test(envToken)) {
+      return envToken;
+    }
+    if (telegramRuntimeConfig.botToken && TELEGRAM_TOKEN_REGEX.test(telegramRuntimeConfig.botToken)) {
+      return telegramRuntimeConfig.botToken;
+    }
+    const candidate = typeof providedToken === 'string' ? providedToken.trim() : '';
+    if (candidate && TELEGRAM_TOKEN_REGEX.test(candidate)) {
+      return candidate;
+    }
+    return '';
+  };
+
   app.get('/api/school/info', (req, res) => {
     res.json({
       nameKm: 'វិទ្យាល័យសម្ដេចតេជោហ៊ុនសែនស្ទឹងត្រង់',
@@ -472,38 +513,114 @@ async function startServer() {
       educationLevel: 'វិទ្យាល័យ (High School / Secondary Education)',
       contact: {
         phone: '',
-        telegram: '',
+        telegram: telegramRuntimeConfig.botUsername,
       },
+    });
+  });
+
+  // 0. Get Telegram Bot Configuration Status (never returns raw token)
+  app.get('/api/telegram/status', (req, res) => {
+    const activeToken = resolveActiveTelegramToken();
+    const envConfigured = Boolean((process.env.TELEGRAM_BOT_TOKEN || '').trim());
+    res.json({
+      ok: true,
+      configured: Boolean(activeToken),
+      maskedToken: maskTelegramToken(activeToken),
+      botUsername: telegramRuntimeConfig.botUsername,
+      chatId: telegramRuntimeConfig.chatId,
+      source: envConfigured ? 'env' : activeToken ? 'runtime' : 'none',
+    });
+  });
+
+  // 0b. Update Telegram Bot Config in server memory (keeps token off client localStorage)
+  app.post('/api/telegram/config', (req, res) => {
+    const { botUsername, chatId, botToken } = req.body || {};
+
+    if (typeof botUsername === 'string' && botUsername.trim()) {
+      telegramRuntimeConfig.botUsername = normalizeBotUsername(botUsername);
+    }
+
+    if (typeof chatId === 'string' && chatId.trim()) {
+      const cleanChatId = chatId.trim();
+      if (!TELEGRAM_CHAT_ID_REGEX.test(cleanChatId)) {
+        return res.status(400).json({
+          ok: false,
+          error: 'ទម្រង់ Chat ID មិនត្រឹមត្រូវទេ (ឧទាហរណ៍៖ 8069577143 ឬ -100123456789)',
+        });
+      }
+      telegramRuntimeConfig.chatId = cleanChatId;
+    }
+
+    if (typeof botToken === 'string' && botToken.trim()) {
+      const cleanToken = botToken.trim();
+      if (!TELEGRAM_TOKEN_REGEX.test(cleanToken)) {
+        return res.status(400).json({
+          ok: false,
+          error: 'ទម្រង់ Telegram Bot Token មិនត្រឹមត្រូវទេ',
+        });
+      }
+      telegramRuntimeConfig.botToken = cleanToken;
+      telegramRuntimeConfig.source = 'runtime';
+    }
+
+    const activeToken = resolveActiveTelegramToken();
+    res.json({
+      ok: true,
+      configured: Boolean(activeToken),
+      maskedToken: maskTelegramToken(activeToken),
+      botUsername: telegramRuntimeConfig.botUsername,
+      chatId: telegramRuntimeConfig.chatId,
+      source: (process.env.TELEGRAM_BOT_TOKEN || '').trim()
+        ? 'env'
+        : activeToken
+        ? 'runtime'
+        : 'none',
     });
   });
 
   // 1. Verify Telegram Bot Connection (getMe)
   app.post('/api/telegram/getMe', async (req, res) => {
-    const token = String(req.body.botToken || '').trim();
+    const provided = typeof req.body?.botToken === 'string' ? req.body.botToken.trim() : '';
+    if (provided && !TELEGRAM_TOKEN_REGEX.test(provided)) {
+      return res.status(400).json({ ok: false, error: 'ទម្រង់ Telegram Bot Token មិនត្រឹមត្រូវទេ' });
+    }
+    const token = provided || resolveActiveTelegramToken();
     if (!token) {
-      return res.status(400).json({ ok: false, error: 'សូមបញ្ចូល Telegram Bot Token របស់សាលាជាមុនសិន' });
+      return res.status(400).json({
+        ok: false,
+        error: 'មិនទាន់បានកំណត់ TELEGRAM_BOT_TOKEN នៅលើ Server ឬក្នុងការកំណត់ Bot នៅឡើយទេ',
+      });
     }
     try {
       const response = await fetch(`https://api.telegram.org/bot${token}/getMe`);
       const data = await response.json();
+      if (data?.ok && data?.result?.username) {
+        telegramRuntimeConfig.botUsername = normalizeBotUsername(data.result.username);
+      }
       res.json(data);
     } catch (err: any) {
-      console.error('Telegram getMe error:', err);
-      res.status(500).json({ ok: false, error: err.message || 'Failed to connect to Telegram API' });
+      console.error('Telegram getMe error:', err?.message || 'network_error');
+      res.status(500).json({ ok: false, error: 'មិនអាចតភ្ជាប់ទៅកាន់ Telegram API បានទេ' });
     }
   });
 
   // 2. Fetch Latest Chat IDs / Updates from Telegram users (getUpdates)
   app.post('/api/telegram/getUpdates', async (req, res) => {
-    const token = String(req.body.botToken || '').trim();
+    const provided = typeof req.body?.botToken === 'string' ? req.body.botToken.trim() : '';
+    if (provided && !TELEGRAM_TOKEN_REGEX.test(provided)) {
+      return res.status(400).json({ ok: false, error: 'ទម្រង់ Telegram Bot Token មិនត្រឹមត្រូវទេ' });
+    }
+    const token = provided || resolveActiveTelegramToken();
     if (!token) {
-      return res.status(400).json({ ok: false, error: 'សូមបញ្ចូល Telegram Bot Token របស់សាលាជាមុនសិន' });
+      return res.status(400).json({
+        ok: false,
+        error: 'សូមកំណត់ Telegram Bot Token ជាមុនសិន',
+      });
     }
     try {
       const response = await fetch(`https://api.telegram.org/bot${token}/getUpdates?offset=-10`);
       const data = await response.json();
       if (data.ok && Array.isArray(data.result)) {
-        // Extract unique chats from recent messages
         const chatsMap = new Map();
         for (const item of data.result) {
           const chat = item.message?.chat || item.channel_post?.chat || item.my_chat_member?.chat;
@@ -524,45 +641,58 @@ async function startServer() {
       }
       res.json(data);
     } catch (err: any) {
-      console.error('Telegram getUpdates error:', err);
-      res.status(500).json({ ok: false, error: err.message || 'Failed to fetch updates' });
+      console.error('Telegram getUpdates error:', err?.message || 'network_error');
+      res.status(500).json({ ok: false, error: 'មិនអាចទាញយកបញ្ជី Chat ID ពី Telegram បានទេ' });
     }
   });
 
   // 3. Send Telegram Message
   app.post('/api/telegram/send', async (req, res) => {
-    const { botToken, chatId, message } = req.body;
-    if (!message) {
-      return res.status(400).json({ ok: false, error: 'Message content is required' });
+    const { botToken, chatId, message, parseMode } = req.body || {};
+    const cleanMessage = typeof message === 'string' ? message.trim().slice(0, 4000) : '';
+    if (!cleanMessage) {
+      return res.status(400).json({ ok: false, error: 'សូមបញ្ចូលខ្លឹមសារសារជាមុនសិន' });
     }
 
-    const token = String(botToken || '').trim();
+    const providedToken = typeof botToken === 'string' ? botToken.trim() : '';
+    if (providedToken && !TELEGRAM_TOKEN_REGEX.test(providedToken)) {
+      return res.status(400).json({ ok: false, error: 'ទម្រង់ Telegram Bot Token មិនត្រឹមត្រូវទេ' });
+    }
+    const token = providedToken || resolveActiveTelegramToken();
 
-    // If no token or chatId provided, record locally and prompt to configure this school's Telegram Bot
-    if (!token || !chatId) {
+    const destChatId = (typeof chatId === 'string' && chatId.trim() ? chatId.trim() : telegramRuntimeConfig.chatId).trim();
+    if (destChatId && !TELEGRAM_CHAT_ID_REGEX.test(destChatId)) {
+      return res.status(400).json({ ok: false, error: 'ទម្រង់ Chat ID មិនត្រឹមត្រូវទេ' });
+    }
+
+    if (!token || !destChatId) {
       return res.json({
         ok: true,
         simulated: true,
-        message: 'បានកត់ត្រាសារក្នុងប្រព័ន្ធ (សូមភ្ជាប់ Telegram Bot Token និង Chat ID ថ្មីរបស់វិទ្យាល័យ ដើម្បីបញ្ជូនចូល Telegram ផ្ទាល់)',
+        message: 'បានកត់ត្រាសារក្នុងប្រព័ន្ធ (សូមកំណត់ TELEGRAM_BOT_TOKEN ក្នុង Settings -> Secrets ឬបញ្ចូល Token ក្នុងម៉ឺនុយ Telegram ដើម្បីបញ្ជូនផ្ទាល់)',
         sentAt: new Date().toISOString(),
       });
     }
 
     try {
+      const payload: Record<string, any> = {
+        chat_id: destChatId,
+        text: cleanMessage,
+      };
+      if (parseMode === 'HTML') {
+        payload.parse_mode = 'HTML';
+      }
+
       const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: message,
-          parse_mode: 'HTML',
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await response.json();
       res.json(data);
     } catch (err: any) {
-      console.error('Telegram dispatch error:', err);
-      res.status(500).json({ ok: false, error: err.message || 'Telegram dispatch failed' });
+      console.error('Telegram dispatch error:', err?.message || 'network_error');
+      res.status(500).json({ ok: false, error: 'មិនអាចបញ្ជូនសារទៅកាន់ Telegram API បានទេ' });
     }
   });
 
@@ -586,20 +716,28 @@ async function startServer() {
   // -------------------------------------------------------------
   // Frontend Serving (Vite middleware in dev, Static in production)
   // -------------------------------------------------------------
+  const httpServer = http.createServer(app);
+
   if (process.env.NODE_ENV === 'production') {
     app.use(express.static(path.join(__dirname, 'dist')));
     app.get('*', (req, res) => {
       res.sendFile(path.join(__dirname, 'dist', 'index.html'));
     });
   } else {
+    const hmrDisabled = process.env.DISABLE_HMR === 'true';
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: hmrDisabled ? false : true,
+        ws: hmrDisabled ? false : ({ server: httpServer } as any),
+        allowedHosts: true,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Samdech Techo Hun Sen Stung Trang High School Server running on http://0.0.0.0:${PORT}`);
   });
 }

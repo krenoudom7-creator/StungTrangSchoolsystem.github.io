@@ -4,20 +4,27 @@ import {
   Bell,
   AlertTriangle,
   CheckCircle2,
-  Clock,
-  Phone,
   MessageSquare,
   Bot,
-  User,
   ExternalLink,
   Settings,
   RefreshCw,
   Key,
   ShieldCheck,
   Zap,
+  Monitor,
+  BellRing,
 } from 'lucide-react';
 import { NotificationItem, Student, SchoolClass } from '../types/index.ts';
 import { storage } from '../services/storage.ts';
+import {
+  getTelegramServerStatus,
+  saveTelegramServerConfig,
+  verifyTelegramBot,
+  fetchTelegramRecentChats,
+  sendTelegramAlert,
+  TelegramServerStatus,
+} from '../services/telegram.ts';
 
 interface TelegramNotificationViewProps {
   notifications: NotificationItem[];
@@ -34,11 +41,21 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
 }) => {
   const currentSettings = storage.getTelegramSettings();
 
-  const [botUsername, setBotUsername] = useState(currentSettings.botUsername || '');
-  const [botToken, setBotToken] = useState(currentSettings.botToken || '');
-  const [chatId, setChatId] = useState(currentSettings.chatId || '');
-  const [isEditingSettings, setIsEditingSettings] = useState(!currentSettings.botToken);
-  const [settingsSavedMsg, setSettingsSavedMsg] = useState(false);
+  const [botUsername, setBotUsername] = useState(currentSettings.botUsername || '@stschoolsystem_bot');
+  const [botTokenInput, setBotTokenInput] = useState('');
+  const [chatId, setChatId] = useState(currentSettings.chatId || '8069577143');
+  const [serverStatus, setServerStatus] = useState<TelegramServerStatus | null>(null);
+  const [isEditingSettings, setIsEditingSettings] = useState(false);
+  const [settingsSavedMsg, setSettingsSavedMsg] = useState('');
+  const [settingsErrorMsg, setSettingsErrorMsg] = useState('');
+
+  // Desktop Notification Permission State
+  const [desktopNotifPermission, setDesktopNotifPermission] = useState<string>(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return window.Notification.permission;
+    }
+    return 'unsupported';
+  });
 
   // Bot Verification State
   const [isVerifying, setIsVerifying] = useState(false);
@@ -56,7 +73,7 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
   const [recentChats, setRecentChats] = useState<Array<{ id: string; title: string; type: string }>>([]);
 
   // Test send state
-  const [selectedStudentId, setSelectedStudentId] = useState<string>(students[0]?.id || '');
+  const [selectedStudentId, setSelectedStudentId] = useState<string>(students[0]?.id || '__custom__');
   const [testReason, setTestReason] = useState<string>('អវត្តមានឥតច្បាប់ ម៉ោងទី ១');
   const [customChatId, setCustomChatId] = useState<string>('');
   const [isSending, setIsSending] = useState(false);
@@ -65,32 +82,53 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
     message: string;
   }>({ type: null, message: '' });
 
-  // Auto-verify bot connection on mount only if a token is configured
+  // Sync server Telegram status and auto-verify on mount
   useEffect(() => {
-    if (botToken.trim()) {
-      handleVerifyBot(botToken);
-    }
+    let active = true;
+    (async () => {
+      const status = await getTelegramServerStatus();
+      if (!active || !status) return;
+      setServerStatus(status);
+      if (status.botUsername) setBotUsername(status.botUsername);
+      if (status.chatId) setChatId(status.chatId);
+      if (status.configured) {
+        await handleVerifyBot();
+      } else {
+        setIsEditingSettings(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const handleVerifyBot = async (tokenToTest: string) => {
-    const cleanToken = tokenToTest.trim();
-    if (!cleanToken) {
-      setVerifyResult({
-        status: 'idle',
-        message: 'មិនទាន់បានកំណត់ Telegram Bot Token នៅឡើយទេ',
-      });
-      return;
+  const handleEnableDesktopNotifications = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    try {
+      const result = await window.Notification.requestPermission();
+      setDesktopNotifPermission(result);
+      if (result === 'granted') {
+        new window.Notification('វិទ្យាល័យសម្ដេចតេជោហ៊ុនសែនស្ទឹងត្រង់', {
+          body: 'ការជូនដំណឹងលើអេក្រង់កុំព្យូទ័រត្រូវបានបើកដំណើរការដោយជោគជ័យ!',
+          icon: '/pwa-192x192.png',
+        });
+      }
+    } catch {
+      // Ignore restricted environments
     }
+  };
+
+  const handleVerifyBot = async (overrideToken?: string) => {
     setIsVerifying(true);
     setVerifyResult({ status: 'idle', message: '' });
 
     try {
-      const res = await fetch(`https://api.telegram.org/bot${cleanToken}/getMe`);
-      const data = await res.json();
+      const data = await verifyTelegramBot(overrideToken);
       if (data.ok && data.result) {
+        const cleanUser = data.result.username ? `@${data.result.username}` : botUsername;
         setVerifyResult({
           status: 'success',
-          message: `Bot ភ្ជាប់ជោគជ័យ៖ ${data.result.first_name} (@${data.result.username}) - ID: ${data.result.id}`,
+          message: `Bot ភ្ជាប់ជោគជ័យ៖ ${data.result.first_name} (${cleanUser}) · Bot ID: ${data.result.id}`,
           botInfo: data.result,
         });
         if (data.result.username) {
@@ -99,13 +137,16 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
       } else {
         setVerifyResult({
           status: 'error',
-          message: data.description || 'Token មិនត្រឹមត្រូវ ឬមិនអាចតភ្ជាប់បានទេ',
+          message:
+            data.description ||
+            data.error ||
+            'មិនទាន់បានកំណត់ TELEGRAM_BOT_TOKEN នៅលើ Server ឬ Token មិនត្រឹមត្រូវ',
         });
       }
     } catch (err: any) {
       setVerifyResult({
         status: 'error',
-        message: err.message || 'កំហុសបណ្តាញតភ្ជាប់ Telegram API',
+        message: err?.message || 'កំហុសបណ្តាញតភ្ជាប់ Telegram API',
       });
     } finally {
       setIsVerifying(false);
@@ -115,97 +156,88 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
   const handleFetchRecentChats = async () => {
     setIsFetchingChats(true);
     try {
-      const cleanToken = botToken.trim();
-      const res = await fetch(`https://api.telegram.org/bot${cleanToken}/getUpdates?offset=-10`);
-      const data = await res.json();
-      if (data.ok && Array.isArray(data.result)) {
-        const chatsMap = new Map();
-        for (const item of data.result) {
-          const chat = item.message?.chat || item.channel_post?.chat || item.my_chat_member?.chat;
-          if (chat && chat.id) {
-            chatsMap.set(String(chat.id), {
-              id: String(chat.id),
-              title: chat.title || `${chat.first_name || ''} ${chat.last_name || ''}`.trim() || chat.username || 'Chat',
-              type: chat.type,
-            });
-          }
-        }
-        const extracted = Array.from(chatsMap.values());
-        setRecentChats(extracted);
-        if (extracted.length > 0 && !chatId) {
-          setChatId(extracted[0].id);
+      const res = await fetchTelegramRecentChats(botTokenInput.trim() || undefined);
+      if (res.ok && res.chats.length > 0) {
+        setRecentChats(res.chats);
+        if (!chatId) {
+          setChatId(res.chats[0].id);
         }
       }
-    } catch (e) {
-      console.warn('Failed to fetch updates:', e);
     } finally {
       setIsFetchingChats(false);
     }
   };
 
-  const handleSaveSettings = (e: React.FormEvent) => {
+  const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSettingsErrorMsg('');
+    setSettingsSavedMsg('');
+
+    const res = await saveTelegramServerConfig({
+      botUsername: botUsername.trim() || '@stschoolsystem_bot',
+      chatId: chatId.trim() || '8069577143',
+      botToken: botTokenInput.trim() || undefined,
+    });
+
+    if (!res.ok) {
+      setSettingsErrorMsg(res.error || 'មិនអាចរក្សាទុកការកំណត់បានទេ');
+      return;
+    }
+
+    if (res.status) {
+      setServerStatus(res.status);
+    }
+
+    // Store only non-secret public metadata in local storage
     storage.updateTelegramSettings({
-      botUsername: botUsername.trim(),
-      botToken: botToken.trim(),
-      chatId: chatId.trim(),
+      botUsername: botUsername.trim() || '@stschoolsystem_bot',
+      chatId: chatId.trim() || '8069577143',
       isEnabled: true,
     });
-    setSettingsSavedMsg(true);
+
+    setBotTokenInput('');
+    setSettingsSavedMsg('ការកំណត់ Telegram Bot ត្រូវបានរក្សាទុកលើ Server ដោយសុវត្ថិភាព!');
     setIsEditingSettings(false);
-    handleVerifyBot(botToken.trim());
+    await handleVerifyBot();
     onRefresh();
-    setTimeout(() => setSettingsSavedMsg(false), 3000);
+    setTimeout(() => setSettingsSavedMsg(''), 4000);
   };
 
   const handleSendTestAlert = async (e: React.FormEvent) => {
     e.preventDefault();
     const student = students.find((s) => s.id === selectedStudentId);
-    if (!student) return;
-
-    const targetClass = classes.find((c) => c.id === student.classId);
+    const targetClass = student ? classes.find((c) => c.id === student.classId) : undefined;
     const className = targetClass?.name || 'ថ្នាក់រៀន';
-    const targetChatId = customChatId.trim() || chatId.trim();
+    const targetChatId = customChatId.trim() || chatId.trim() || '8069577143';
 
-    const testMsg = `🔔 <b>[វិទ្យាល័យសម្ដេចតេជោហ៊ុនសែនស្ទឹងត្រង់]</b>
+    const testMsg = student
+      ? `🔔 <b>[វិទ្យាល័យសម្ដេចតេជោហ៊ុនសែនស្ទឹងត្រង់]</b>
 <b>ដំណឹងអវត្តមានសិស្ស៖</b>
 សូមជម្រាបជូនលោក/លោកស្រី <b>${student.parentName}</b> (${student.parentRelationship} របស់សិស្ស <b>${student.khmerName}</b> ថ្នាក់ <b>${className}</b>) ថាកូនរបស់លោក/លោកស្រីបាន «<b>${testReason}</b>» នៅថ្ងៃនេះ។
-📍 សូមមេត្តាទាក់ទងមកកាន់លេខាធិការដ្ឋានសាលា ឬគ្រូប្រចាំថ្នាក់ដើម្បីបំភ្លឺ។ សូមអរគុណ!`;
+📍 សូមមេត្តាទាក់ទងមកកាន់លេខាធិការដ្ឋានសាលា ឬគ្រូប្រចាំថ្នាក់ដើម្បីបំភ្លឺ។ សូមអរគុណ!`
+      : `🔔 <b>[វិទ្យាល័យសម្ដេចតេជោហ៊ុនសែនស្ទឹងត្រង់]</b>
+<b>សារសាកល្បងប្រព័ន្ធ Telegram Bot (@stschoolsystem_bot)៖</b>
+${testReason}
+✅ ការតភ្ជាប់ប្រព័ន្ធគ្រប់គ្រងសាលារៀន (កុំព្យូទ័រ & ទូរស័ព្ទ) ដំណើរការធម្មតា!`;
 
     setIsSending(true);
     setSendFeedback({ type: null, message: '' });
 
     try {
-      const cleanToken = botToken.trim();
-      let resData: any = null;
+      const result = await sendTelegramAlert(testMsg, targetChatId, {
+        parseMode: 'HTML',
+        skipLog: true,
+      });
 
-      if (targetChatId && cleanToken) {
-        const response = await fetch(`https://api.telegram.org/bot${cleanToken}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: targetChatId,
-            text: testMsg,
-            parse_mode: 'HTML',
-          }),
-        });
-        resData = await response.json();
-      } else {
-        // Local record
-        resData = {
-          ok: true,
-          simulated: true,
-        };
-      }
-
-      // Record in local notification history
       const newNotif: NotificationItem = {
         id: `notif-${Date.now()}`,
         type: 'telegram',
-        recipientName: `${student.parentName} (${student.parentRelationship})`,
-        recipientPhone: student.parentPhone,
-        studentName: student.khmerName,
-        title: `ដំណឹងអវត្តមាន - ${student.khmerName}`,
+        recipientName: student
+          ? `${student.parentName} (${student.parentRelationship})`
+          : `Telegram ID: ${targetChatId}`,
+        recipientPhone: student?.parentPhone || targetChatId,
+        studentName: student?.khmerName || 'សារសាកល្បងប្រព័ន្ធ',
+        title: student ? `ដំណឹងអវត្តមាន - ${student.khmerName}` : 'សារសាកល្បង Telegram Bot',
         message: testMsg.replace(/<[^>]*>/g, ''),
         status: 'sent',
         sentAt: new Date().toISOString(),
@@ -214,42 +246,46 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
       storage.addNotification(newNotif, 'Telegram Bot');
       onRefresh();
 
-      if (resData.ok) {
-        if (resData.simulated) {
+      if (result.ok) {
+        if (result.simulated) {
           setSendFeedback({
             type: 'success',
-            message: 'សារត្រូវបានកត់ត្រាទុកក្នុងប្រព័ន្ធ! (ដើម្បីបញ្ជូនចូល Telegram ផ្ទាល់ សូមកំណត់ Bot Token និង Chat ID ថ្មីរបស់សាលាជាមុនសិន)',
+            message:
+              result.description ||
+              'សារត្រូវបានកត់ត្រាទុកក្នុងប្រព័ន្ធ! (សូមកំណត់ TELEGRAM_BOT_TOKEN ក្នុង Settings -> Secrets ឬបញ្ចូលក្នុងផ្ទាំង «កែប្រែ Bot» ដើម្បីផ្ញើចូល Telegram ផ្ទាល់)',
           });
         } else {
           setSendFeedback({
             type: 'success',
-            message: `សារ Telegram ត្រូវបានបញ្ជូនចូល Bot ដោយជោគជ័យ! (Message ID: ${resData.result?.message_id || 'OK'})`,
+            message: `សារ Telegram ត្រូវបានបញ្ជូនទៅ ID ${targetChatId} ដោយជោគជ័យ! (Message ID: ${result.messageId || 'OK'})`,
           });
         }
       } else {
         setSendFeedback({
           type: 'error',
-          message: `កំហុស Telegram: ${resData.description || 'សូមពិនិត្យមើល Chat ID ឬចុច Start Bot ជាមុន'}`,
+          message: `កំហុស Telegram: ${result.description || 'សូមពិនិត្យមើល Chat ID ឬចុច Start Bot ជាមុន'}`,
         });
       }
     } catch (err: any) {
       setSendFeedback({
         type: 'error',
-        message: err.message || 'កំហុសបណ្តាញ មិនអាចផ្ញើសារបានទេ',
+        message: err?.message || 'កំហុសបណ្តាញ មិនអាចផ្ញើសារបានទេ',
       });
     } finally {
       setIsSending(false);
     }
   };
 
+  const cleanHandle = (botUsername || '@stschoolsystem_bot').replace(/^@/, '');
+
   return (
     <div className="space-y-6">
       {/* Top Banner & Bot Info Header */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs relative overflow-hidden">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-blue-600 text-white flex items-center justify-center shadow-md">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-blue-600 text-white flex items-center justify-center shadow-md shrink-0">
                 <Send className="w-5 h-5" />
               </div>
               <div>
@@ -257,30 +293,52 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
                   ប្រព័ន្ធ Telegram Bot ជូនដំណឹងវត្តមានសិស្ស
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Samdech Techo Hun Sen Stung Trang High School · Telegram Bot Automation
+                  វិទ្យាល័យសម្ដេចតេជោហ៊ុនសែនស្ទឹងត្រង់ · @{cleanHandle} · Default Chat ID: {chatId || '8069577143'}
                 </p>
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Telegram Link direct button */}
-            {botUsername.trim() ? (
-              <a
-                href={`https://t.me/${botUsername.replace('@', '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs"
+            {/* Open in Telegram Desktop (Computer) */}
+            <a
+              href={`tg://resolve?domain=${cleanHandle}`}
+              className="px-3 py-1.5 bg-blue-900 hover:bg-blue-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs"
+            >
+              <Monitor className="w-4 h-4 text-amber-300" />
+              <span>បើកលើ Telegram កុំព្យូទ័រ</span>
+            </a>
+
+            {/* Open in Telegram Web / Mobile */}
+            <a
+              href={`https://t.me/${cleanHandle}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs"
+            >
+              <Bot className="w-4 h-4 text-sky-600" />
+              <span>បើក @{cleanHandle}</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+
+            {/* Desktop OS Notifications */}
+            {desktopNotifPermission !== 'unsupported' && (
+              <button
+                type="button"
+                onClick={handleEnableDesktopNotifications}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                  desktopNotifPermission === 'granted'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200'
+                }`}
               >
-                <Bot className="w-4 h-4 text-sky-600" />
-                <span>បើក Bot Telegram ({botUsername})</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            ) : (
-              <span className="px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-xs font-semibold flex items-center gap-1.5">
-                <Bot className="w-4 h-4 text-amber-600" />
-                <span>មិនទាន់ភ្ជាប់ Bot ថ្មី</span>
-              </span>
+                <BellRing className="w-4 h-4" />
+                <span>
+                  {desktopNotifPermission === 'granted'
+                    ? 'ដំណឹងកុំព្យូទ័រ៖ បើករួច'
+                    : 'បើកដំណឹងលើកុំព្យូទ័រ'}
+                </span>
+              </button>
             )}
 
             {/* Edit / Config Toggle Button */}
@@ -297,12 +355,12 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
 
         {/* Status Verification Bar */}
         <div className="mt-4 pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex items-center gap-2 text-xs flex-wrap">
             <span className="font-semibold text-slate-600">ស្ថានភាព Bot៖</span>
             {isVerifying ? (
               <span className="flex items-center gap-1.5 text-amber-600">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                <span>កំពុងផ្ទៀងផ្ទាត់ការតភ្ជាប់...</span>
+                <span>កំពុងផ្ទៀងផ្ទាត់ការតភ្ជាប់តាម Server Proxy...</span>
               </span>
             ) : verifyResult.status === 'success' ? (
               <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold text-[11px]">
@@ -315,13 +373,15 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
                 <span>{verifyResult.message}</span>
               </span>
             ) : (
-              <span className="text-slate-400">មិនទាន់ផ្ទៀងផ្ទាត់</span>
+              <span className="text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200 text-[11px] font-semibold">
+                រង់ចាំកំណត់ TELEGRAM_BOT_TOKEN (Settings → Secrets ឬបញ្ចូលខាងក្រោម)
+              </span>
             )}
           </div>
 
           <button
             type="button"
-            onClick={() => handleVerifyBot(botToken)}
+            onClick={() => handleVerifyBot()}
             disabled={isVerifying}
             className="text-[11px] text-blue-700 hover:text-blue-900 font-semibold flex items-center gap-1 hover:underline cursor-pointer"
           >
@@ -331,23 +391,39 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
         </div>
 
         {/* Telegram Config Overview Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
           <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/80">
             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wide">ឈ្មោះ Bot (Username)</span>
-            <div className="text-xs font-mono font-bold text-sky-800 mt-1 flex items-center gap-1">
-              <span>{botUsername || 'មិនទាន់កំណត់'}</span>
-              {botUsername && botToken ? (
-                <span className="text-[10px] px-1.5 py-0.2 bg-sky-100 text-sky-700 rounded-sm">Active</span>
-              ) : (
-                <span className="text-[10px] px-1.5 py-0.2 bg-slate-200 text-slate-600 rounded-sm">មិនទាន់ភ្ជាប់</span>
-              )}
+            <div className="text-xs font-mono font-bold text-sky-800 mt-1 flex items-center gap-1.5">
+              <span>@{cleanHandle}</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-sm ${
+                  serverStatus?.configured
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-amber-100 text-amber-800'
+                }`}
+              >
+                {serverStatus?.configured ? 'Online' : 'Ready'}
+              </span>
             </div>
           </div>
 
           <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/80">
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wide">Bot Token API</span>
-            <div className="text-xs font-mono text-slate-700 truncate mt-1" title={botToken || 'មិនទាន់កំណត់'}>
-              {botToken ? `${botToken.substring(0, 15)}•••••••••••••••••••••` : 'មិនទាន់កំណត់ Bot Token'}
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wide">Chat ID គោលដៅ (Admin ID)</span>
+            <div className="text-xs font-mono font-bold text-slate-800 mt-1">
+              {chatId || '8069577143'}
+            </div>
+          </div>
+
+          <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/80">
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wide">Server Bot Token</span>
+            <div className="text-xs font-mono text-slate-700 truncate mt-1 flex items-center gap-1">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>
+                {serverStatus?.configured
+                  ? serverStatus.maskedToken
+                  : 'រង់ចាំកំណត់លើ Server'}
+              </span>
             </div>
           </div>
 
@@ -355,19 +431,24 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wide">ចំនួនសារបានផ្ញើ</span>
             <div className="text-xs font-bold text-emerald-700 mt-1 flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>{notifications.length} សារ (ជោគជ័យ)</span>
+              <span>{notifications.length} សារ</span>
             </div>
           </div>
         </div>
 
         {/* Config Edit Panel (Collapsible) */}
         {isEditingSettings && (
-          <div className="mt-5 p-4 bg-sky-50/50 rounded-2xl border border-sky-200 animate-in fade-in slide-in-from-top-2">
-            <div className="flex items-center gap-2 mb-3">
-              <Key className="w-4 h-4 text-sky-700" />
-              <h3 className="text-xs font-bold text-slate-900">
-                កែប្រែការកំណត់ Telegram Bot Token & Chat ID
-              </h3>
+          <div className="mt-5 p-4 bg-sky-50/50 rounded-2xl border border-sky-200">
+            <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Key className="w-4 h-4 text-sky-700" />
+                <h3 className="text-xs font-bold text-slate-900">
+                  កំណត់ការតភ្ជាប់ Telegram Bot (រក្សាទុក Token លើ Server ដោយសុវត្ថិភាព)
+                </h3>
+              </div>
+              <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                Server-Side Proxy Protected
+              </span>
             </div>
 
             <form onSubmit={handleSaveSettings} className="space-y-3">
@@ -380,7 +461,7 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
                     type="text"
                     value={botUsername}
                     onChange={(e) => setBotUsername(e.target.value)}
-                    placeholder="@stungtrang_school_bot"
+                    placeholder="@stschoolsystem_bot"
                     className="w-full text-xs p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-600 focus:outline-hidden font-mono"
                     required
                   />
@@ -388,15 +469,18 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
 
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    Bot Token (ពី @BotFather)
+                    Bot Token (ពី @BotFather · ផ្ញើទៅ Server ផ្ទាល់)
                   </label>
                   <input
-                    type="text"
-                    value={botToken}
-                    onChange={(e) => setBotToken(e.target.value)}
-                    placeholder="1234567890:ABCdefGHIjklMNOpqrSTUvwxYZ"
+                    type="password"
+                    value={botTokenInput}
+                    onChange={(e) => setBotTokenInput(e.target.value)}
+                    placeholder={
+                      serverStatus?.configured
+                        ? 'បានកំណត់រួចលើ Server (ទុកទទេដើម្បីប្រើ Token បច្ចុប្បន្ន)'
+                        : 'បញ្ចូល Bot Token របស់អ្នកនៅទីនេះ ឬកំណត់ TELEGRAM_BOT_TOKEN ក្នុង Secrets'
+                    }
                     className="w-full text-xs p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-600 focus:outline-hidden font-mono"
-                    required
                   />
                 </div>
               </div>
@@ -420,11 +504,11 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
                   type="text"
                   value={chatId}
                   onChange={(e) => setChatId(e.target.value)}
-                  placeholder="ឧទាហរណ៍៖ 123456789 ឬ -100123456789"
+                  placeholder="8069577143"
                   className="w-full text-xs p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-600 focus:outline-hidden font-mono"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
-                  💡 គន្លឹះ៖ បើក Telegram ចូលទៅកាន់ <b>{botUsername || 'Bot របស់សាលា'}</b> រួចចុច <b>/start</b> ឬផ្ញើសារមួយ រួចចុច «ស្វែងរក Chat ID ស្វ័យប្រវត្ត» ដើម្បីចាប់យក ID។
+                  💡 ដើម្បីឱ្យ Bot ដំណើរការជាប់ជានិច្ចគ្រប់ពេលបើកម៉ាស៊ីន សូមបន្ថែម <b>TELEGRAM_BOT_TOKEN</b> នៅក្នុង AI Studio <b>Settings → Secrets</b> ឬបញ្ចូល Token នៅប្រអប់ខាងលើរួចចុច «រក្សាទុកការកំណត់»។
                 </p>
 
                 {recentChats.length > 0 && (
@@ -446,6 +530,13 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
                 )}
               </div>
 
+              {settingsErrorMsg && (
+                <div className="p-2 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-xs flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{settingsErrorMsg}</span>
+                </div>
+              )}
+
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -466,9 +557,9 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
         )}
 
         {settingsSavedMsg && (
-          <div className="mt-3 p-2 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs flex items-center gap-1.5 animate-in fade-in">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>ការកំណត់ Bot ត្រូវបានរក្សាទុកដោយជោគជ័យ!</span>
+          <div className="mt-3 p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs flex items-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{settingsSavedMsg}</span>
           </div>
         )}
       </div>
@@ -485,20 +576,21 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
               <h3 className="text-xs font-bold text-slate-900">
                 ផ្ញើសារសាកល្បងទៅ Telegram
               </h3>
-              <p className="text-[10px] text-slate-400">តេស្តបញ្ជូនសារវត្តមានចូល Bot ពិតប្រាកដ</p>
+              <p className="text-[10px] text-slate-400">បញ្ជូនសារតាម @{cleanHandle} ទៅ ID {chatId || '8069577143'}</p>
             </div>
           </div>
 
           <form onSubmit={handleSendTestAlert} className="space-y-3">
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">
-                ជ្រើសរើសសិស្ស
+                ជ្រើសរើសសិស្ស ឬផ្ញើសារទូទៅ
               </label>
               <select
                 value={selectedStudentId}
                 onChange={(e) => setSelectedStudentId(e.target.value)}
                 className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-600 focus:outline-hidden"
               >
+                <option value="__custom__">📢 សារសាកល្បងទូទៅរបស់សាលា (មិនជ្រើសសិស្ស)</option>
                 {students.map((s) => {
                   const c = classes.find((item) => item.id === s.classId);
                   return (
@@ -512,7 +604,7 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
 
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">
-                មូលហេតុ / ស្ថានភាព
+                មូលហេតុ / ខ្លឹមសារសារ
               </label>
               <input
                 type="text"
@@ -524,13 +616,13 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
 
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">
-                Chat ID គោលដៅ (បើមិនដាក់ ប្រើ Default ID)
+                Chat ID គោលដៅ (បើមិនដាក់ ប្រើ Default ID: {chatId || '8069577143'})
               </label>
               <input
                 type="text"
                 value={customChatId}
                 onChange={(e) => setCustomChatId(e.target.value)}
-                placeholder={chatId || 'បញ្ចូល Chat ID របស់អ្នក...'}
+                placeholder={chatId || '8069577143'}
                 className="w-full text-xs p-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-600 focus:outline-hidden font-mono"
               />
             </div>
@@ -572,11 +664,22 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
           <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-600 space-y-1">
             <div className="font-bold text-slate-800 flex items-center gap-1">
               <Zap className="w-3.5 h-3.5 text-amber-500" />
-              <span>របៀបទទួលសារក្នុង Telegram៖</span>
+              <span>របៀបទទួលសារលើកុំព្យូទ័រ និងទូរស័ព្ទ៖</span>
             </div>
-            <p>១. បង្កើត Bot ថ្មីជាមួយ @BotFather ហើយបញ្ចូល Token រួចចូលទៅកាន់ {botUsername ? <a href={`https://t.me/${botUsername.replace('@', '')}`} target="_blank" rel="noreferrer" className="text-sky-700 font-bold underline">{botUsername}</a> : <b>Bot របស់សាលា</b>}</p>
-            <p>២. ចុចប៊ូតុង <b>Start</b> ក្នុង Telegram</p>
-            <p>៣. ចុច «ស្វែងរក Chat ID ស្វ័យប្រវត្ត» ក្នុងផ្ទាំងកែប្រែ</p>
+            <p>
+              ១. ចុចបើក{' '}
+              <a
+                href={`https://t.me/${cleanHandle}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sky-700 font-bold underline"
+              >
+                @{cleanHandle}
+              </a>{' '}
+              លើ Telegram ទូរស័ព្ទ ឬ Telegram Desktop
+            </p>
+            <p>២. ចុចប៊ូតុង <b>Start</b> ដើម្បីអនុញ្ញាតឱ្យ Bot ផ្ញើសារមក ID <b>{chatId || '8069577143'}</b></p>
+            <p>៣. កំណត់ <b>TELEGRAM_BOT_TOKEN</b> ក្នុង Settings → Secrets ដើម្បីការពារសុវត្ថិភាព Token</p>
           </div>
         </div>
 
@@ -589,12 +692,12 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
                 ប្រវត្តិសារ Telegram ដែលបានបញ្ជូន ({notifications.length})
               </h3>
             </div>
-            <span className="text-[10px] text-slate-400 font-sans">
-              Bot: {botUsername || 'មិនទាន់កំណត់'}
+            <span className="text-[10px] text-slate-400 font-mono">
+              @{cleanHandle} · ID: {chatId || '8069577143'}
             </span>
           </div>
 
-          <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+          <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
             {notifications.map((notif) => (
               <div
                 key={notif.id}
@@ -633,6 +736,7 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
 
             {notifications.length === 0 && (
               <div className="p-8 text-center text-xs text-slate-400">
+                <Bell className="w-8 h-8 text-slate-300 mx-auto mb-2 stroke-1" />
                 មិនទាន់មានប្រវត្តិសារជូនដំណឹងនៅឡើយទេ
               </div>
             )}

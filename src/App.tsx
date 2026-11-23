@@ -21,8 +21,9 @@ import { LoginModal } from './components/LoginModal.tsx';
 import { LoginScreen } from './components/LoginScreen.tsx';
 import { PrintReportModal } from './components/PrintReportModal.tsx';
 import { BellNotificationToast, ToastData } from './components/BellNotificationToast.tsx';
+import { DesktopCommandPalette } from './components/DesktopCommandPalette.tsx';
+import { OfflineIndicator } from './components/OfflineIndicator.tsx';
 import { checkAbsenceWarning } from './utils/calculations.ts';
-import { SCHOOL_LOGO_URL } from './utils/schoolLogo.ts';
 import { Menu, X, LayoutDashboard, CalendarCheck2, GraduationCap, FileText, MoreHorizontal } from 'lucide-react';
 
 export default function App() {
@@ -32,6 +33,63 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => storage.getCurrentSession());
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('sths_desktop_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleSidebar = useCallback(() => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('sths_desktop_sidebar_collapsed', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
+  // Desktop PC Keyboard Shortcuts (Ctrl+K Quick Search, Alt+B Sidebar, Alt+1..8 & Alt+T Tabs)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+        return;
+      }
+      if (!e.altKey || e.ctrlKey || e.metaKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+
+      const key = e.key.toLowerCase();
+      const tabShortcutMap: Record<string, NavTab> = {
+        '1': 'dashboard',
+        '2': 'attendance',
+        '3': 'attendance_reports',
+        '4': 'grades',
+        '5': 'timetable',
+        '6': 'students',
+        '7': 'teachers',
+        '8': 'classes',
+        t: 'telegram',
+      };
+
+      if (key === 'b') {
+        e.preventDefault();
+        handleToggleSidebar();
+      } else if (tabShortcutMap[key]) {
+        e.preventDefault();
+        setCurrentTab(tabShortcutMap[key]);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleToggleSidebar]);
 
   const handleOpenClassAttendance = useCallback((classId?: string) => {
     if (classId) {
@@ -235,6 +293,9 @@ export default function App() {
           onOpenLoginModal={() => setIsLoginModalOpen(true)}
           onLogout={handleLogout}
           onTriggerToast={handleTriggerToast}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onToggleSidebar={handleToggleSidebar}
+          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         />
 
       {/* Mobile Menu Bar Toggle (Ultra-compact on Android) */}
@@ -262,6 +323,7 @@ export default function App() {
             onSelectTab={(tab) => setCurrentTab(tab)}
             userRole={currentUser.role}
             unexcusedCount={unexcusedCount}
+            collapsed={isSidebarCollapsed}
           />
         </div>
 
@@ -299,8 +361,8 @@ export default function App() {
           </div>
         )}
 
-        {/* Main Content Area */}
-        <main className="flex-1 min-w-0 p-2 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full pb-20 md:pb-10 print:p-0 print:m-0 print:max-w-none print:overflow-visible">
+        {/* Main Content Area (Wide Desktop Support up to 1600px) */}
+        <main className="flex-1 min-w-0 p-2 sm:p-5 lg:p-6 xl:p-8 max-w-[1600px] mx-auto w-full pb-20 md:pb-10 print:p-0 print:m-0 print:max-w-none print:overflow-visible">
           {currentTab === 'dashboard' && (
             <DashboardView
               students={dbState.students}
@@ -527,6 +589,18 @@ export default function App() {
         reportType={printModalInfo.reportType}
         data={printModalInfo.data}
       />
+
+      {/* Desktop Quick Command Palette (Ctrl+K) */}
+      <DesktopCommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onSelectTab={(tab) => setCurrentTab(tab)}
+        onToggleSidebar={handleToggleSidebar}
+        students={dbState.students}
+      />
+
+      {/* Offline Mode Connectivity Indicator */}
+      <OfflineIndicator />
 
       {/* Login Authentication Modal */}
       <LoginModal

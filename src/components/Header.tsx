@@ -12,12 +12,16 @@ import {
   Key,
   Lock,
   LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
 } from 'lucide-react';
 import { User, UserRole, NotificationItem } from '../types/index.ts';
 import { formatKhmerDate, getTodayLocalStr } from '../utils/calculations.ts';
 import { safeAvatar, DEFAULT_ADMIN_AVATAR, SCHOOL_LOGO_URL } from '../utils/avatar.ts';
 import { storage } from '../services/storage.ts';
 import { KhmerBorderStrip, KhmerCornerOrnament } from './KhmerOrnament.tsx';
+import { PWAInstallButton } from './PWAInstallButton.tsx';
 
 interface HeaderProps {
   currentUser: User;
@@ -29,6 +33,9 @@ interface HeaderProps {
   onOpenLoginModal: () => void;
   onLogout: () => void;
   onTriggerToast?: (toast: { title: string; message: string; type?: 'info' | 'warning' | 'alert' | 'success'; actionLabel?: string; actionTab?: any }) => void;
+  isSidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
+  onOpenCommandPalette?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -41,6 +48,9 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenLoginModal,
   onLogout,
   onTriggerToast,
+  isSidebarCollapsed = false,
+  onToggleSidebar,
+  onOpenCommandPalette,
 }) => {
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [showNotifMenu, setShowNotifMenu] = useState(false);
@@ -92,10 +102,24 @@ export const Header: React.FC<HeaderProps> = ({
       <KhmerCornerOrnament position="top-left" size={32} variant="gold" className="opacity-70 hidden sm:block" />
       <KhmerCornerOrnament position="top-right" size={32} variant="gold" className="opacity-70 hidden sm:block" />
 
-      <div className="max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8">
+      <div className="max-w-[1600px] mx-auto px-2.5 sm:px-5 lg:px-6">
         <div className="flex items-center justify-between min-h-[48px] sm:min-h-[74px] py-1 sm:py-2 gap-1.5 sm:gap-3">
           {/* Brand & Subtitle */}
-          <div className="flex items-center space-x-2 sm:space-x-3.5 min-w-0 flex-1">
+          <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+            {onToggleSidebar && (
+              <button
+                type="button"
+                onClick={onToggleSidebar}
+                title={isSidebarCollapsed ? 'ពង្រីកម៉ឺនុយចំហៀង (Alt+B)' : 'បង្រួមម៉ឺនុយចំហៀង (Alt+B)'}
+                className="hidden md:inline-flex items-center justify-center p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 hover:text-blue-950 shadow-2xs transition-colors cursor-pointer shrink-0"
+              >
+                {isSidebarCollapsed ? (
+                  <PanelLeftOpen className="w-4 h-4" />
+                ) : (
+                  <PanelLeftClose className="w-4 h-4" />
+                )}
+              </button>
+            )}
             <div className="w-10 h-10 sm:w-12 sm:h-12 aspect-square shrink-0 rounded-full bg-white ring-1 sm:ring-2 ring-amber-300/80 shadow-xs sm:shadow-md flex items-center justify-center flex-shrink-0 overflow-hidden relative">
               <img
                 src={SCHOOL_LOGO_URL}
@@ -126,10 +150,29 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Right Actions: Date, Notification Bell, User Switcher */}
-          <div className="flex items-center space-x-1 sm:space-x-3 shrink-0">
+          {/* Right Actions: Quick Search (PC), Install PC App, Date, Notification Bell, User Switcher */}
+          <div className="flex items-center space-x-1 sm:space-x-2 shrink-0">
+            {/* Desktop Quick Command Palette Trigger (Ctrl+K) */}
+            {onOpenCommandPalette && (
+              <button
+                type="button"
+                onClick={onOpenCommandPalette}
+                title="ស្វែងរកម៉ឺនុយរហ័សលើកុំព្យូទ័រ (Ctrl+K)"
+                className="hidden lg:inline-flex items-center gap-2 px-2.5 py-1.5 text-xs text-slate-600 bg-slate-100/90 hover:bg-slate-200/80 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+              >
+                <Search className="w-3.5 h-3.5 text-blue-900" />
+                <span>ស្វែងរករហ័ស</span>
+                <kbd className="px-1.5 py-0.2 text-[10px] font-mono font-bold bg-white border border-slate-300 rounded text-slate-700">
+                  Ctrl+K
+                </kbd>
+              </button>
+            )}
+
+            {/* Desktop / Mobile PWA Install Button */}
+            <PWAInstallButton variant="header" />
+
             {/* Date Display */}
-            <div className="hidden lg:flex items-center gap-1.5 text-xs text-slate-600 bg-slate-100/80 px-3 py-1.5 rounded-lg border border-slate-200/60">
+            <div className="hidden xl:flex items-center gap-1.5 text-xs text-slate-600 bg-slate-100/80 px-2.5 py-1.5 rounded-lg border border-slate-200/60">
               <Calendar className="w-3.5 h-3.5 text-blue-800" />
               <span className="font-medium">{khmerDateStr}</span>
             </div>
@@ -139,7 +182,7 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               onClick={handleTestBellAlert}
               title="សាកល្បងសារលោតកណ្ដឹង"
-              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-indigo-500/10 text-amber-900 border border-amber-300 hover:border-amber-400 rounded-lg shadow-2xs hover:shadow-xs transition-all cursor-pointer"
+              className="hidden 2xl:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-indigo-500/10 text-amber-900 border border-amber-300 hover:border-amber-400 rounded-lg shadow-2xs hover:shadow-xs transition-all cursor-pointer"
             >
               <Bell className="w-3.5 h-3.5 text-amber-600 animate-bell-ring" />
               <span>សាកល្បងកណ្ដឹង</span>

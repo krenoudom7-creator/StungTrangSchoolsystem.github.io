@@ -187,8 +187,9 @@ test('storage: notifications operations (addNotification, markAllNotificationsAs
 
 test('storage: telegram settings operations (getTelegramSettings, updateTelegramSettings)', () => {
   const settings = storage.getTelegramSettings();
-  assert.strictEqual(settings.botUsername, '');
+  assert.strictEqual(settings.botUsername, '@stschoolsystem_bot');
   assert.strictEqual(settings.botToken, '');
+  assert.strictEqual(settings.chatId, '8069577143');
 
   storage.updateTelegramSettings({
     chatId: '-100987654321',
