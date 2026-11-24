@@ -23,14 +23,25 @@ export interface TelegramChatCandidate {
   username?: string;
 }
 
+async function safeJsonResponse(res: Response): Promise<any | null> {
+  try {
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Fetch server-side Telegram Bot status (never receives raw token)
  */
 export async function getTelegramServerStatus(): Promise<TelegramServerStatus | null> {
+  if (!storage.isBackendAvailable()) return null;
   try {
     const res = await fetch('/api/telegram/status');
     if (!res.ok) return null;
-    return await res.json();
+    return await safeJsonResponse(res);
   } catch {
     return null;
   }
@@ -44,15 +55,28 @@ export async function saveTelegramServerConfig(payload: {
   chatId?: string;
   botToken?: string;
 }): Promise<{ ok: boolean; status?: TelegramServerStatus; error?: string }> {
+  if (!storage.isBackendAvailable()) {
+    return {
+      ok: true,
+      status: {
+        ok: true,
+        configured: false,
+        maskedToken: '',
+        botUsername: payload.botUsername || '@stschoolsystem_bot',
+        chatId: payload.chatId || '8069577143',
+        source: 'none',
+      },
+    };
+  }
   try {
     const res = await fetch('/api/telegram/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      return { ok: false, error: data.error || 'មិនអាចរក្សាទុកការកំណត់ Bot បានទេ' };
+    const data = await safeJsonResponse(res);
+    if (!res.ok || !data?.ok) {
+      return { ok: false, error: data?.error || 'មិនអាចរក្សាទុកការកំណត់ Bot បានទេ' };
     }
     return { ok: true, status: data };
   } catch (err: any) {
@@ -69,13 +93,23 @@ export async function verifyTelegramBot(botToken?: string): Promise<{
   description?: string;
   error?: string;
 }> {
+  if (!storage.isBackendAvailable()) {
+    return {
+      ok: false,
+      error: 'ការផ្ញើសារ Telegram ផ្ទាល់ទាមទារ Backend Server (មិនដំណើរការលើ Static GitHub Pages ទេ)',
+    };
+  }
   try {
     const res = await fetch('/api/telegram/getMe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(botToken ? { botToken: botToken.trim() } : {}),
     });
-    return await res.json();
+    const data = await safeJsonResponse(res);
+    if (!data) {
+      return { ok: false, error: 'មិនអាចតភ្ជាប់ Telegram Backend Proxy បានទេ' };
+    }
+    return data;
   } catch (err: any) {
     return { ok: false, error: err?.message || 'កំហុសបណ្តាញតភ្ជាប់ Telegram API' };
   }
@@ -89,17 +123,20 @@ export async function fetchTelegramRecentChats(botToken?: string): Promise<{
   chats: TelegramChatCandidate[];
   error?: string;
 }> {
+  if (!storage.isBackendAvailable()) {
+    return { ok: false, chats: [], error: 'ទាមទារ Backend Server ដើម្បីទាញបញ្ជី Chat ID' };
+  }
   try {
     const res = await fetch('/api/telegram/getUpdates', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(botToken ? { botToken: botToken.trim() } : {}),
     });
-    const data = await res.json();
-    if (data.ok && Array.isArray(data.chats)) {
+    const data = await safeJsonResponse(res);
+    if (data?.ok && Array.isArray(data.chats)) {
       return { ok: true, chats: data.chats };
     }
-    return { ok: false, chats: [], error: data.error || data.description };
+    return { ok: false, chats: [], error: data?.error || data?.description };
   } catch (err: any) {
     return { ok: false, chats: [], error: err?.message || 'កំហុសបណ្តាញ' };
   }
@@ -114,8 +151,8 @@ export function triggerDesktopNotification(title: string, body: string): void {
     if (window.Notification.permission === 'granted') {
       new window.Notification(title, {
         body,
-        icon: '/pwa-192x192.png',
-        badge: '/pwa-192x192.png',
+        icon: './pwa-192x192.png',
+        badge: './pwa-192x192.png',
       });
     }
   } catch {
@@ -148,6 +185,14 @@ export async function sendTelegramAlert(
       });
     }
 
+    if (!storage.isBackendAvailable()) {
+      return {
+        ok: true,
+        simulated: true,
+        description: 'បានកត់ត្រាសារក្នុងប្រព័ន្ធ (Static Hosting: ត្រូវការ Backend Server ដើម្បីបញ្ជូនទៅ Telegram ផ្ទាល់)',
+      };
+    }
+
     const response = await fetch('/api/telegram/send', {
       method: 'POST',
       headers: {
@@ -160,7 +205,13 @@ export async function sendTelegramAlert(
       }),
     });
 
-    const data = await response.json();
+    const data = await safeJsonResponse(response);
+    if (!data) {
+      return {
+        ok: false,
+        description: 'មិនអាចតភ្ជាប់ទៅកាន់ Telegram API Server បានទេ',
+      };
+    }
 
     if (data.ok && !data.simulated) {
       triggerDesktopNotification(

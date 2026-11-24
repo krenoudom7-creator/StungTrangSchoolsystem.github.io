@@ -149,15 +149,17 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
       // 1. Update in local storage
       storage.updateUser(editingUser.id, payload);
 
-      // 2. Sync to Backend API
-      try {
-        await fetch(`/api/users/${editingUser.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-      } catch (err) {
-        console.warn('Backend update notice:', err);
+      // 2. Sync to Backend API when available
+      if (storage.isBackendAvailable()) {
+        try {
+          await fetch(`/api/users/${editingUser.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+        } catch (err) {
+          console.warn('Backend update notice:', err);
+        }
       }
 
       setFeedbackMsg({ type: 'success', text: `បានកែប្រែគណនី ${formData.name} ក្នុង Central Database ជោគជ័យ!` });
@@ -175,15 +177,17 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
       // 1. Add to local storage
       const created = storage.addUser(payload);
 
-      // 2. Dispatch to Backend API
-      try {
-        await fetch('/api/users', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...payload, id: created.id }),
-        });
-      } catch (err) {
-        console.warn('Backend create notice:', err);
+      // 2. Dispatch to Backend API when available
+      if (storage.isBackendAvailable()) {
+        try {
+          await fetch('/api/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...payload, id: created.id }),
+          });
+        } catch (err) {
+          console.warn('Backend create notice:', err);
+        }
       }
 
       setFeedbackMsg({ type: 'success', text: `បានបង្កើតគណនីថ្មី ${formData.name} ក្នុង Central Database ដោយជោគជ័យ!` });
@@ -205,13 +209,15 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
       // 1. Remove from local store
       storage.deleteUser(deleteConfirmUser.id);
 
-      // 2. Remove via Backend API
-      try {
-        await fetch(`/api/users/${deleteConfirmUser.id}`, {
-          method: 'DELETE',
-        });
-      } catch (err) {
-        console.warn('Backend delete notice:', err);
+      // 2. Remove via Backend API when available
+      if (storage.isBackendAvailable()) {
+        try {
+          await fetch(`/api/users/${deleteConfirmUser.id}`, {
+            method: 'DELETE',
+          });
+        } catch (err) {
+          console.warn('Backend delete notice:', err);
+        }
       }
 
       setFeedbackMsg({ type: 'success', text: `បានដកគណនី ${deleteConfirmUser.name} ចេញពីប្រព័ន្ធ!` });
@@ -233,15 +239,17 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
     storage.setSystemAccessCode(trimmed, currentUser.name);
     setSystemAccessCode(trimmed);
 
-    // Sync to Backend API
-    try {
-      await fetch('/api/system/access-code', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessCode: trimmed }),
-      });
-    } catch (err) {
-      console.warn('Backend password sync notice:', err);
+    // Sync to Backend API when available
+    if (storage.isBackendAvailable()) {
+      try {
+        await fetch('/api/system/access-code', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessCode: trimmed }),
+        });
+      } catch (err) {
+        console.warn('Backend password sync notice:', err);
+      }
     }
 
     setFeedbackMsg({
@@ -266,15 +274,17 @@ export const UsersManagementView: React.FC<UsersManagementViewProps> = ({
     setSystemAccessCode(trimmed);
     setIsChangePassModalOpen(false);
 
-    // Sync to Backend API
-    try {
-      await fetch('/api/system/access-code', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessCode: trimmed }),
-      });
-    } catch (err) {
-      console.warn('Backend access-code sync notice:', err);
+    // Sync to Backend API when available
+    if (storage.isBackendAvailable()) {
+      try {
+        await fetch('/api/system/access-code', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessCode: trimmed }),
+        });
+      } catch (err) {
+        console.warn('Backend access-code sync notice:', err);
+      }
     }
 
     setFeedbackMsg({

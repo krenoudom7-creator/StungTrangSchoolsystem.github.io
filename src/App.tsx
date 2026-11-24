@@ -54,6 +54,10 @@ export default function App() {
     });
   }, []);
 
+  const handleCloseCommandPalette = useCallback(() => {
+    setIsCommandPaletteOpen(false);
+  }, []);
+
   // Desktop PC Keyboard Shortcuts (Ctrl+K Quick Search, Alt+B Sidebar, Alt+1..8 & Alt+T Tabs)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -593,8 +597,8 @@ export default function App() {
       {/* Desktop Quick Command Palette (Ctrl+K) */}
       <DesktopCommandPalette
         isOpen={isCommandPaletteOpen}
-        onClose={() => setIsCommandPaletteOpen(false)}
-        onSelectTab={(tab) => setCurrentTab(tab)}
+        onClose={handleCloseCommandPalette}
+        onSelectTab={setCurrentTab}
         onToggleSidebar={handleToggleSidebar}
         students={dbState.students}
       />

@@ -110,7 +110,7 @@ export const TelegramNotificationView: React.FC<TelegramNotificationViewProps> =
       if (result === 'granted') {
         new window.Notification('វិទ្យាល័យសម្ដេចតេជោហ៊ុនសែនស្ទឹងត្រង់', {
           body: 'ការជូនដំណឹងលើអេក្រង់កុំព្យូទ័រត្រូវបានបើកដំណើរការដោយជោគជ័យ!',
-          icon: '/pwa-192x192.png',
+          icon: './pwa-192x192.png',
         });
       }
     } catch {

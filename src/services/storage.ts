@@ -670,8 +670,44 @@ class StorageService {
     return 'ព្រឹក ម៉ោងទី ១ (០៧:០០ - ០៧:៥០)';
   }
 
+  private backendApiAvailable: boolean | null = null;
+
+  public isBackendAvailable(): boolean {
+    if (this.backendApiAvailable !== null) return this.backendApiAvailable;
+    if (typeof window === 'undefined' || !('fetch' in window)) return false;
+    const host = window.location?.hostname || '';
+    const proto = window.location?.protocol || '';
+    if (host.endsWith('.github.io') || proto === 'file:') {
+      this.backendApiAvailable = false;
+      return false;
+    }
+    return true;
+  }
+
+  private async detectBackendApi(): Promise<boolean> {
+    if (this.backendApiAvailable !== null) return this.backendApiAvailable;
+    if (typeof window === 'undefined' || !('fetch' in window)) {
+      this.backendApiAvailable = false;
+      return false;
+    }
+    const host = window.location?.hostname || '';
+    const proto = window.location?.protocol || '';
+    if (host.endsWith('.github.io') || proto === 'file:') {
+      this.backendApiAvailable = false;
+      return false;
+    }
+    try {
+      const res = await window.fetch('/api/health');
+      const isJson = res.headers.get('content-type')?.includes('application/json');
+      this.backendApiAvailable = Boolean(res.ok && isJson);
+    } catch {
+      this.backendApiAvailable = false;
+    }
+    return this.backendApiAvailable;
+  }
+
   private pushSharedStateToServer(): void {
-    if (typeof window === 'undefined' || !('fetch' in window)) return;
+    if (!this.isBackendAvailable()) return;
     window
       .fetch('/api/sync/state', {
         method: 'POST',
@@ -689,14 +725,25 @@ class StorageService {
           deletedIds: this.db.deletedIds || [],
         }),
       })
+      .then((res) => {
+        if (res.status === 404 || res.status === 405) {
+          this.backendApiAvailable = false;
+        }
+      })
       .catch(() => {});
   }
 
   private pullSharedStateFromServer(): void {
-    if (typeof window === 'undefined' || !('fetch' in window)) return;
+    if (!this.isBackendAvailable()) return;
     window
       .fetch('/api/sync/state')
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => {
+        if (res.status === 404 || res.status === 405) {
+          this.backendApiAvailable = false;
+          return null;
+        }
+        return res.ok ? res.json() : null;
+      })
       .then((data) => {
         if (!data || !data.state) return;
         const st = data.state;
@@ -795,8 +842,12 @@ class StorageService {
           syncClassToCloud(cls).catch(() => {});
         }
       });
-      this.pushSharedStateToServer();
-      this.pullSharedStateFromServer();
+      this.detectBackendApi().then((available) => {
+        if (available) {
+          this.pushSharedStateToServer();
+          this.pullSharedStateFromServer();
+        }
+      });
     }, 300);
 
     // 2. Listen to cross-tab localStorage updates and periodic central server sync
@@ -816,7 +867,9 @@ class StorageService {
     });
 
     setInterval(() => {
-      this.pullSharedStateFromServer();
+      if (this.backendApiAvailable === true) {
+        this.pullSharedStateFromServer();
+      }
     }, 4000);
 
     // 3. Real-time Firestore listeners with tombstone enforcement (deleted items never resurrect)
@@ -1815,8 +1868,8 @@ class StorageService {
           };
           this.db.notifications.unshift(notif);
 
-          // Dispatch live Telegram alert through server-side proxy when running in browser
-          if (typeof fetch === 'function') {
+          // Dispatch live Telegram alert through server-side proxy when backend is available
+          if (typeof fetch === 'function' && this.isBackendAvailable()) {
             const targetChatId = (this.db.telegramSettings?.chatId || '8069577143').trim();
             fetch('/api/telegram/send', {
               method: 'POST',
@@ -2305,8 +2358,8 @@ class StorageService {
     );
     this.saveDatabase(this.db);
 
-    // Sync to backend server API
-    if (typeof window !== 'undefined' && 'fetch' in window) {
+    // Sync to backend server API when available
+    if (typeof window !== 'undefined' && 'fetch' in window && this.isBackendAvailable()) {
       window.fetch('/api/system/access-code', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

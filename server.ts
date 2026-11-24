@@ -724,12 +724,12 @@ async function startServer() {
       res.sendFile(path.join(__dirname, 'dist', 'index.html'));
     });
   } else {
-    const hmrDisabled = process.env.DISABLE_HMR === 'true';
+    const hmrEnabled = process.env.ENABLE_HMR === 'true' && process.env.DISABLE_HMR !== 'true';
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: hmrDisabled ? false : true,
-        ws: hmrDisabled ? false : ({ server: httpServer } as any),
+        hmr: hmrEnabled ? { server: httpServer } : false,
+        watch: hmrEnabled ? {} : null,
         allowedHosts: true,
       },
       appType: 'spa',

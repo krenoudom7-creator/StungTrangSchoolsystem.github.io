@@ -206,6 +206,7 @@ export const DesktopCommandPalette: React.FC<DesktopCommandPaletteProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
+        e.stopPropagation();
         onClose();
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -219,8 +220,8 @@ export const DesktopCommandPalette: React.FC<DesktopCommandPaletteProps> = ({
         onClose();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [isOpen, filtered, selectedIndex, onClose]);
 
   if (!isOpen) return null;
@@ -229,6 +230,12 @@ export const DesktopCommandPalette: React.FC<DesktopCommandPaletteProps> = ({
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/60 pt-16 sm:pt-24 px-4 font-khmer no-print"
       onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          onClose();
+        }
+      }}
     >
       <div
         className="w-full max-w-xl rounded-2xl bg-white shadow-2xl border border-amber-300/60 overflow-hidden"
